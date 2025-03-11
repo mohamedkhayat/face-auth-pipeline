@@ -33,18 +33,24 @@ git clone https://github.com/mohamedkhayat/face-auth-pipeline.git
 cd face-auth-pipeline
 ```
 
-### **2️⃣ Create a Conda Virtual Environment**
+### **2️⃣ Set Up the Environment**
+
+#### **Option 1: Using `env.yml` (Recommended)**
+If you prefer using Conda's environment file, run:
 ```bash
-conda create --name facenetcorrect python=3.9 -y
+conda env create -f env.yml
 conda activate facenetcorrect
 ```
 
-### **3️⃣ Install Dependencies**
+#### **Option 2: Manual Installation**
+Create a new Conda environment and install dependencies manually:
 ```bash
+conda create --name facenet python=3.9 -y
+conda activate facenet
 pip install -r requirements.txt
 ```
 
-> **Note**: If using GPU, ensure you have PyTorch installed with CUDA.  
+> **⚠ Note**: If you plan to use a GPU, ensure you have **PyTorch installed with CUDA**. You can check PyTorch's official [installation guide](https://pytorch.org/get-started/locally/) for the correct setup.
 
 ---
 
