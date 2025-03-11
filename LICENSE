@@ -19,3 +19,9 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Third-Party Licenses
+
+VGGFace2 Dataset
+
+This project utilizes the VGGFace2 dataset, which is provided by the Visual Geometry Group at the University of Oxford. The dataset is intended for non-commercial research purposes only. By using this dataset, you agree to adhere to its licensing terms. For more details, please visit the [VGGFace2 dataset page](https://www.robots.ox.ac.uk/~vgg/data/vgg_face2/).
