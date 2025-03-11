@@ -1,0 +1,14 @@
+BATCH_SIZE = 64 * 3
+LR = 2e-4
+DECAY = 1e-3
+DROPOUT = 0.3
+EPOCHS = 65
+FACTOR = 0.75
+EMB_DIM = 512
+THRESHOLD = 0.9
+ALPHA = 0.4
+N_EPOCHS_MARGIN = 49 # might need to change this to 75 or 100
+MARGIN = 0.8
+INITIAL_MARGIN = 1.0 
+PEAK_MARGIN = 0.6 # maybe make this a bit higher
+FINAL_MARGIN = 0.3 # maybe lower this
