@@ -32,11 +32,11 @@ def hard_triplet_loss(anchor_embs, positive_embs, negative_embs, margin=config.M
     losses = F.relu(d_ap[hard_mask] - d_an[hard_mask] + margin)
     return losses.mean()
   
-def hybrid_triplet_loss(anchor_embs, positive_embs, negative_embs, epoch, margin = config.MARGIN, alpha = config.ALPHA):
+def hybrid_triplet_loss(anchor_embs, positive_embs, negative_embs, epoch, margin_scheduling = True, margin = config.MARGIN, alpha = config.ALPHA):
   d_an = F.pairwise_distance(anchor_embs,negative_embs)
   d_ap = F.pairwise_distance(anchor_embs,positive_embs)
-    
-  margin = margin_schedule(epoch)
+  if margin_scheduling:
+    margin = margin_schedule(epoch)
 
   hard_mask = d_an < d_ap
 
