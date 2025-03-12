@@ -176,3 +176,4 @@ meta/
 ROCplots/
 tsneplots/
 wandb/
+src/evaluate.py
