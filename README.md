@@ -111,12 +111,14 @@ curl -X 'POST' 'http://127.0.0.1:8000/compare' \
 ## **🔬 Results**
 | Metric           | Score |
 |-----------------|-------|
-| **Best Threshold** | `0.9` |
-| **Accuracy**     | `91%` |
-| **Precision**    | `90%` |
-| **Recall**       | `91%` |
-| **F1 Score**     | `90%` |
-| **ROC AUC**      | `96%` |
+| **Best Threshold** | `0.91` |
+| **Accuracy**     | `89%` |
+| **Precision**    | `86%` |
+| **Recall**       | `92%` |
+| **F1 Score**     | `89%` |
+| **ROC AUC**      | `95%` |
+
+![tsne_plotexperiment_11_03_18_56](https://github.com/user-attachments/assets/1ae679f5-3188-4509-9f26-ed85859f0792)
 
 ---
 
