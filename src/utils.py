@@ -78,7 +78,7 @@ class EarlyStopping:
         self.early_stop = False
         self.path = path
 
-    def __call__(self, val_loss, val_acc, model):
+    def __call__(self, val_loss, val_acc, model,optimizer):
       
         if self.best_loss is None:
             self.best_loss = val_loss
@@ -96,7 +96,7 @@ class EarlyStopping:
             if self.counter >= self.patience:
                 self.early_stop = True
                 
-def train_one_epoch(model, loader, optimizer, loss_fn, scaler, device, epoch):
+def train_one_epoch(model, loader, optimizer, loss_fn, scaler, device, epoch, margin_sched = True):
     model.train()
     running_loss = 0.0
     
@@ -112,7 +112,6 @@ def train_one_epoch(model, loader, optimizer, loss_fn, scaler, device, epoch):
             pos_embs = model(pos_imgs)
             neg_embs = model(neg_imgs)
             loss = loss_fn(anchor_embs, pos_embs, neg_embs, epoch)
-        
         scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
@@ -122,7 +121,7 @@ def train_one_epoch(model, loader, optimizer, loss_fn, scaler, device, epoch):
     return running_loss / len(loader)
 
 @torch.no_grad()
-def validate(model, loader, loss_fn, device, epoch, threshold = 0.75):
+def validate(model, loader, loss_fn, device, epoch, threshold = 0.75, margin_sched = True):
     model.eval()
     running_loss = 0.0
     all_sim = []
@@ -137,7 +136,7 @@ def validate(model, loader, loss_fn, device, epoch, threshold = 0.75):
         pos_embs = model(pos_imgs)
         neg_embs = model(neg_imgs)
 
-        batch_loss = loss_fn(anchor_embs, pos_embs, neg_embs, epoch)
+        batch_loss = loss_fn(anchor_embs, pos_embs, neg_embs, epoch,margin_sched)
         running_loss += batch_loss.item()
 
         pos_sim = F.cosine_similarity(anchor_embs, pos_embs)
@@ -360,4 +359,3 @@ def evaluate_model(model, device, dataset_path, test_transforms, name):
     artifact = wandb.Artifact("roc_plots", type="analysis")
     artifact.add_file(plot_filename)
     wandb.log_artifact(artifact)
-    wandb.finish()

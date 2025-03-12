@@ -11,7 +11,6 @@ from model import FaceVerificationModel
 from dataset import TSNEDataset,FaceVerificationDataset
 from loss import hybrid_triplet_loss
 import config
-
 set_seed(42)
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))  # Go one level up
@@ -30,8 +29,6 @@ FACTOR = config.FACTOR
 EMB_DIM =config.EMB_DIM 
 THRESHOLD = config.THRESHOLD 
 ALPHA = config.ALPHA 
-INITIAL_ALPHA = config.INITIAL_ALPHA 
-FINAL_ALPHA =config.FINAL_ALPHA 
 N_EPOCHS_MARGIN = config.N_EPOCHS_MARGIN 
 MARGIN = config.MARGIN 
 INITIAL_MARGIN = config.INITIAL_MARGIN 
@@ -107,16 +104,17 @@ test_identities = get_all_identities(test_data_path)
 test_label_to_imgs = build_label_to_images(test_data_path,test_identities)
 
 train_dataset = FaceVerificationDataset(train_label_to_imgs, train_transforms)
-train_loader = DataLoader(train_dataset, batch_size = BATCH_SIZE ,shuffle = True, num_workers = min(4, os.cpu_count() // 2))
+train_loader = DataLoader(train_dataset, batch_size = BATCH_SIZE ,shuffle = True, num_workers = min(4, os.cpu_count() // 2), persistent_workers = True)
 
 test_dataset = FaceVerificationDataset(test_label_to_imgs,test_transforms)
-test_loader = DataLoader(test_dataset, batch_size = BATCH_SIZE, num_workers = min(4, os.cpu_count() // 2))
+test_loader = DataLoader(test_dataset, batch_size = BATCH_SIZE, num_workers = min(4, os.cpu_count() // 2), persistent_workers = True)
 
 backbone = resnet50(weights=ResNet50_Weights.DEFAULT)
 model = FaceVerificationModel(backbone, dropout=DROPOUT, embedding_size=EMB_DIM).to(device)
+model = torch.compile(model, mode="default")
 
 loss_fn = hybrid_triplet_loss  
-early_stopping = EarlyStopping(patience=5, min_delta = 0.01, path = './models/'+name+'_model.pth')
+early_stopping = EarlyStopping(patience=5, min_delta = 0.001, path = './models/'+name+'_model.pth')
 
 optimizer = torch.optim.AdamW([
     {"params": model.backbone.layer4.parameters(), "lr": 5e-5},
@@ -129,11 +127,10 @@ scaler = torch.cuda.amp.GradScaler()
 for epoch in range(EPOCHS):
 
     train_loss = train_one_epoch(model, train_loader, optimizer, loss_fn, scaler, device, epoch)
-    val_loss, val_acc = validate(
-        model, test_loader, loss_fn, device,epoch, threshold = THRESHOLD
-    )
-    #if epoch > 10:
-    early_stopping(val_loss, val_acc, model)
+    val_loss, val_acc = validate(model, test_loader, loss_fn, device,epoch, threshold = THRESHOLD)
+
+    if epoch > 10:
+      early_stopping(val_loss, val_acc, model, optimizer)
     scheduler.step(val_loss)
     
     current_lr = optimizer.param_groups[-1]['lr']
