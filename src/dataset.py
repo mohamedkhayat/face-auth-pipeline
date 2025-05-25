@@ -1,13 +1,17 @@
 from torch.utils.data import Dataset
 import random
 from PIL import Image
+
+
 class FaceVerificationDataset(Dataset):
     def __init__(self, label_to_imgs, transform=None):
         self.label_to_imgs = label_to_imgs
         self.transform = transform
         self.labels = list(label_to_imgs.keys())
 
-        self.valid_pairs = [lbl for lbl in self.labels if len(self.label_to_imgs[lbl]) >= 2]
+        self.valid_pairs = [
+            lbl for lbl in self.labels if len(self.label_to_imgs[lbl]) >= 2
+        ]
 
     def __len__(self):
         return len(self.valid_pairs) * 10
@@ -35,14 +39,13 @@ class FaceVerificationDataset(Dataset):
             return self.__getitem__(random.randint(0, len(self) - 1))
 
     def load_and_transform(self, img_path):
-        img = Image.open(img_path).convert('RGB')
+        img = Image.open(img_path).convert("RGB")
         if self.transform:
             img = self.transform(img)
         return img
 
 
 class TSNEDataset(Dataset):
-
     def __init__(self, label_to_imgs, transform=None):
         self.transform = transform
         self.samples = []
