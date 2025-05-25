@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import torchvision.transforms.v2 as T
 from torchvision.models import resnet50, ResNet50_Weights

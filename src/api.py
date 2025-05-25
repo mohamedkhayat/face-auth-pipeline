@@ -1,12 +1,8 @@
 import io
-import numpy as np
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Request
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from PIL import Image
-import uvicorn
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms.v2 as T
 from torchvision.models import resnet50

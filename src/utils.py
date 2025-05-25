@@ -1,7 +1,8 @@
-import os, random, PIL, torch
+import os
+import random
+import torch
 from PIL import Image
 import numpy as np
-import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt

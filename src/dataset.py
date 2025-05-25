@@ -21,7 +21,7 @@ class FaceVerificationDataset(Dataset):
 
         anchor_path, positive_path = random.sample(self.label_to_imgs[anchor_label], 2)
 
-        negative_candidates = [l for l in self.valid_pairs if l != anchor_label]
+        negative_candidates = [lbl for lbl in self.valid_pairs if lbl != anchor_label]
         negative_label = random.choice(negative_candidates)
         negative_path = random.choice(self.label_to_imgs[negative_label])
 
@@ -35,7 +35,8 @@ class FaceVerificationDataset(Dataset):
 
             return anchor_img, positive_img, negative_img
 
-        except:
+        except Exception as e:
+            print(f"Error loading images : {e}")
             return self.__getitem__(random.randint(0, len(self) - 1))
 
     def load_and_transform(self, img_path):
