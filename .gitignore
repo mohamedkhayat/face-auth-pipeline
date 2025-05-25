@@ -177,3 +177,6 @@ ROCplots/
 tsneplots/
 wandb/
 src/evaluate.py
+
+.ruff_cache
+.vscode
