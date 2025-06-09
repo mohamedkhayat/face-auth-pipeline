@@ -4,11 +4,11 @@ import torch
 from PIL import Image
 import numpy as np
 import torch.nn.functional as F
-from sklearn.manifold import TSNE
+from sklearn.manifold import TSNE  # type: ignore
 import matplotlib.pyplot as plt
 import wandb
 import config
-from sklearn.metrics import (
+from sklearn.metrics import (  # type: ignore
     accuracy_score,
     precision_score,
     recall_score,
