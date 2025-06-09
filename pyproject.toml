@@ -1,0 +1,5 @@
+[tool.mypy]
+disable_error_code = ["import-untyped"]
+[[tool.mypy.overrides]]
+module = ["torch.*","wandb","PIL","sklearn.*", "torchvision.*", "matplotlib.*", "numpy"]
+ignore_missing_imports = true
