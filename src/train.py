@@ -11,6 +11,7 @@ from utils import (
     get_portion_of_identities,
     evaluate_model,
     build_label_to_images,
+    ensure_dir,
     set_seed,
     extract_embeddings,
     plot_and_log_tsne,
@@ -24,14 +25,10 @@ from dataset import TSNEDataset, FaceVerificationDataset
 from loss import hybrid_triplet_loss
 import config
 
-set_seed(42)
+set_seed(config.SEED)
 
-PROJECT_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..")
-)  # Go one level up
-os.makedirs(os.path.join(PROJECT_ROOT, "models"), exist_ok=True)
-os.makedirs(os.path.join(PROJECT_ROOT, "tsneplots"), exist_ok=True)
-os.makedirs(os.path.join(PROJECT_ROOT, "ROCplots"), exist_ok=True)
+for _dir in (config.MODELS_DIR, config.TSNE_PLOTS_DIR, config.ROC_PLOTS_DIR):
+    ensure_dir(_dir)
 
 print("Directories created or already exist!")
 
@@ -55,8 +52,9 @@ now = datetime.datetime.now()
 name = now.strftime("experiment_%d_%m_%H_%M")
 
 wandb.init(
-    project="face-verification",
+    project=config.WANDB_PROJECT,
     name=name,
+    mode=config.WANDB_MODE,
     config={
         "batch_size": BATCH_SIZE,
         "learning_rate": LR,
@@ -86,13 +84,13 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 train_transforms = T.Compose(
     [
-        T.Resize((256, 256)),
-        T.RandomCrop(224),  # Random crop
+        T.Resize((config.TRAIN_RESIZE, config.TRAIN_RESIZE)),
+        T.RandomCrop(config.INPUT_SIZE),  # Random crop
         T.RandomHorizontalFlip(),
-        T.RandomRotation(10),
+        T.RandomRotation(config.TRAIN_ROTATION_DEG),
         T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.1),
         T.RandomAffine(
-            degrees=5, translate=(0.05, 0.05), scale=(0.95, 1.05)
+            degrees=config.TRAIN_AFFINE_DEG, translate=(0.05, 0.05), scale=(0.95, 1.05)
         ),  # More conservative
         T.ToImage(),
         T.ToDtype(torch.float32, scale=True),
@@ -102,21 +100,29 @@ train_transforms = T.Compose(
 
 test_transforms = T.Compose(
     [
-        T.Resize((224, 224)),
+        T.Resize((config.INPUT_SIZE, config.INPUT_SIZE)),
         T.ToImage(),
         T.ToDtype(torch.float32, scale=True),
         T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
     ]
 )
 
-dataset_path = "./data"
+train_data_path = config.TRAIN_DATA_DIR
+test_data_path = config.VAL_DATA_DIR
 
-train_data_path = os.path.join(dataset_path, "train")
-test_data_path = os.path.join(dataset_path, "val")
+for _d in (train_data_path, test_data_path):
+    if not os.path.isdir(_d):
+        raise SystemExit(
+            f"Dataset not found: {_d} does not exist. "
+            "Place identity folders of face images under data/train/ and "
+            "data/val/ (or set DATA_DIR). See the README."
+        )
 
 train_identities = get_all_identities(train_data_path)
 
-train_chosen_identities = get_portion_of_identities(train_identities, 1)
+train_chosen_identities = get_portion_of_identities(
+    train_identities, config.TRAIN_IDENTITY_FRACTION
+)
 train_label_to_imgs = build_label_to_images(train_data_path, train_chosen_identities)
 
 test_identities = get_all_identities(test_data_path)
@@ -127,32 +133,36 @@ train_loader = DataLoader(
     train_dataset,
     batch_size=BATCH_SIZE,
     shuffle=True,
-    num_workers=min(4, os.cpu_count() // 2),
+    num_workers=config.NUM_WORKERS,
     persistent_workers=True,
 )
 
 test_dataset = FaceVerificationDataset(test_label_to_imgs, test_transforms)
 test_loader = DataLoader(
-    test_dataset,
-    batch_size=BATCH_SIZE,
-    num_workers=min(4, os.cpu_count() // 2),
-    persistent_workers=True,
+test_dataset,
+batch_size=BATCH_SIZE,
+num_workers=config.NUM_WORKERS,
+persistent_workers=True,
 )
 
 backbone = resnet50(weights=ResNet50_Weights.DEFAULT)
 model = FaceVerificationModel(backbone, dropout=DROPOUT, embedding_size=EMB_DIM).to(
     device
 )
-model = torch.compile(model, mode="default")
+# The compiled module is only used for the training forwards; saves/reloads use
+# the original model so checkpoints have plain (unprefixed) state_dict keys.
+compiled_model = torch.compile(model, mode="default")
 
 loss_fn = hybrid_triplet_loss
 early_stopping = EarlyStopping(
-    patience=5, min_delta=0.001, path="./models/" + name + "_model.pth"
+    patience=config.EARLY_STOP_PATIENCE,
+    min_delta=config.EARLY_STOP_MIN_DELTA,
+    path=config.MODEL_PATH,
 )
 
 optimizer = torch.optim.AdamW(
     [
-        {"params": model.backbone.layer4.parameters(), "lr": 5e-5},
+        {"params": model.backbone.layer4.parameters(), "lr": config.LAYER4_LR},
         {"params": model.embedding_layer.parameters(), "lr": LR},
     ],
     weight_decay=DECAY,
@@ -161,17 +171,17 @@ optimizer = torch.optim.AdamW(
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     optimizer, mode="min", factor=FACTOR, patience=3
 )
-scaler = torch.cuda.amp.GradScaler()
+scaler = torch.amp.GradScaler("cuda")
 
 for epoch in range(EPOCHS):
     train_loss = train_one_epoch(
-        model, train_loader, optimizer, loss_fn, scaler, device, epoch
+        compiled_model, train_loader, optimizer, loss_fn, scaler, device, epoch
     )
     val_loss, val_acc = validate(
-        model, test_loader, loss_fn, device, epoch, threshold=THRESHOLD
+        compiled_model, test_loader, loss_fn, device, epoch, threshold=THRESHOLD
     )
 
-    if epoch > 10:
+    if epoch > config.EARLY_STOP_WARMUP:
         early_stopping(val_loss, val_acc, model, optimizer)
     scheduler.step(val_loss)
 
@@ -193,7 +203,13 @@ for epoch in range(EPOCHS):
 
 wandb.log({"best_loss": early_stopping.best_loss})
 
-root_dir = "./data/val/"
+if not os.path.exists(early_stopping.path):
+    # Short run (EPOCHS <= EARLY_STOP_WARMUP): early stopping never fired, so
+    # the model was never saved — save the final model instead of crashing.
+    torch.save(model.state_dict(), early_stopping.path)
+    print("saved final model (early stopping never triggered)")
+
+root_dir = config.VAL_DATA_DIR
 
 label_to_imgs = build_label_to_imgs(root_dir)
 
@@ -203,15 +219,21 @@ subset_dict = random_subset_label_dict(
 
 tsne_dataset = TSNEDataset(subset_dict, transform=test_transforms)
 model.load_state_dict(
-    torch.load("./models/" + name + "_model.pth", map_location=device)
+    torch.load(config.MODEL_PATH, map_location=device)
 )
 
-tsne_dataloader = DataLoader(tsne_dataset, batch_size=32, shuffle=False)
+tsne_dataloader = DataLoader(
+    tsne_dataset, batch_size=config.EVAL_BATCH_SIZE, shuffle=False
+)
 
 embeddings, labels = extract_embeddings(model, tsne_dataloader, device)
 
 plot_and_log_tsne(
-    embeddings, labels, name=name, perplexity=40, artifact_name="tsne_" + name
+    embeddings,
+    labels,
+    name=name,
+    perplexity=config.TSNE_PERPLEXITY,
+    artifact_name="tsne_" + name,
 )
 
 evaluate_model(model, device, root_dir, test_transforms, name=name)

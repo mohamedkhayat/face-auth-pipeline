@@ -6,6 +6,7 @@ A **deep learning-based face authentication pipeline** using **ResNet-50** for f
 ## **📜 Table of Contents**
 - [Features](#features)
 - [Installation](#installation)
+- [Dataset](#dataset)
 - [Training](#training)
 - [API Usage](#api-usage)
 - [Results](#results)
@@ -27,45 +28,71 @@ A **deep learning-based face authentication pipeline** using **ResNet-50** for f
 ---
 
 ## **⚡ Installation**
+No Conda needed — plain **pip** or **uv** in a virtualenv. Requires **Python ≥ 3.11**.
+
 ### **1️⃣ Clone the Repository**
 ```bash
 git clone https://github.com/mohamedkhayat/face-auth-pipeline.git
 cd face-auth-pipeline
 ```
 
-### **2️⃣ Set Up the Environment**
+### **2️⃣ Create a virtualenv and install dependencies**
+Dependencies in `requirements.txt` are pinned to a version set verified end-to-end.
 
-#### **Option 1: Using `env.yml` (Recommended)**
-If you prefer using Conda's environment file, run:
+#### **Option A: uv (recommended)**
 ```bash
-conda env create -f env.yml
-conda activate facenetcorrect
+uv venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
 ```
 
-#### **Option 2: Manual Installation**
-Create a new Conda environment and install dependencies manually:
+#### **Option B: pip**
 ```bash
-conda create --name facenet python=3.9 -y
-conda activate facenet
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-> **⚠ Note**: If you plan to use a GPU, ensure you have **PyTorch installed with CUDA**. You can check PyTorch's official [installation guide](https://pytorch.org/get-started/locally/) for the correct setup.
+> **GPU:** on Linux, the pinned `torch`/`torchvision` install **CUDA-enabled** wheels from PyPI by default. For a **CPU-only** machine, install the CPU builds first, then the rest (already-satisfied pins are skipped):
+> ```bash
+> pip install torch==2.14.1 torchvision==0.29.1 \
+>     --index-url https://download.pytorch.org/whl/cpu
+> pip install -r requirements.txt
+> ```
+> For other platforms see the [PyTorch install guide](https://pytorch.org/get-started/locally/). Training automatically falls back to CPU when no GPU is available (e.g. `CUDA_VISIBLE_DEVICES="" python src/train.py`).
+
+> **MTCNN:** the first API start downloads the MTCNN face-detector weights (~30 MB) automatically — you need internet access once.
+
+---
+
+## **🗂 Dataset**
+Place face images in **one folder per identity** under `data/`:
+```
+data/
+├── train/
+│   ├── <identity_1>/  img1.jpg, img2.jpg, ...
+│   ├── <identity_2>/  ...
+└── val/
+    ├── <identity_1>/  ...
+    └── ...
+```
+Each identity must contain **at least 2 images**. To use a different location, set the `DATA_DIR` environment variable (defaults to `<repo>/data`).
 
 ---
 
 ## **🎯 Training**
-1. Place your dataset in `./data/train/` and `./data/val/`
-2. Run the training script:
 ```bash
 python src/train.py
 ```
-3. Training progress is logged in **Weights & Biases (W&B)**.
+- Uses GPU if available, otherwise CPU.
+- **W&B logging is offline by default**, so no account is needed. To log to the cloud: `wandb login` and `WANDB_MODE=online python src/train.py`.
+- All hyperparameters and paths live in **`src/config.py`**. `EPOCHS`, `DATA_DIR`, `MODELS_DIR`, `MODEL_FILENAME`, and `WANDB_MODE` can be overridden with environment variables.
+- The best model is saved to **`models/face_verification_resnet50.pth`**; t-SNE and ROC plots are written to `tsneplots/` and `ROCplots/`.
 
 ---
 
 ## **🚀 API Usage**
-Once trained, deploy the model using **FastAPI**:
+Train a model first (step above) — the API loads `models/face_verification_resnet50.pth` on startup. Then deploy with **FastAPI**:
 ```bash
 uvicorn src.api:app --reload
 ```
@@ -105,6 +132,7 @@ curl -X 'POST' 'http://127.0.0.1:8000/compare' \
   "result": "access_granted"
 }
 ```
+Decision thresholds are in `src/config.py`: `similarity ≥ THRESHOLD (0.9)` → `access_granted`, `≥ EMAIL_THRESHOLD (0.5)` → `email_verification`, otherwise `access_denied`.
 
 ---
 
@@ -128,5 +156,3 @@ curl -X 'POST' 'http://127.0.0.1:8000/compare' \
 
 ## **🙌 Acknowledgments**
 -I gratefully acknowledge the use of the VGGFace2 dataset in this project. VGGFace2 is a large-scale face recognition dataset collected by the Visual Geometry Group at the University of Oxford, containing 3.31 million images of 9,131 subjects with large variations in pose, age, illumination, ethnicity, and profession. For more details, please refer to the original paper: [VGGFace2: A dataset for recognising faces across pose and age](https://www.robots.ox.ac.uk/~vgg/publications/2018/Cao18/cao18.pdf).
-
-

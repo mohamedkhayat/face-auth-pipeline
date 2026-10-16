@@ -176,7 +176,9 @@ meta/
 ROCplots/
 tsneplots/
 wandb/
+models/
 src/evaluate.py
+.pi/
 
 .ruff_cache
 .vscode

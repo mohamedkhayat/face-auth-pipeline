@@ -1,4 +1,5 @@
 import io
+import os
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.responses import JSONResponse
 from PIL import Image
@@ -18,11 +19,11 @@ def load_and_preprocess_image(image_bytes: bytes, transform):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Cannot open image : {str(e)}")
 
-    box, _ = mtcnn.detect(img)
+    box = mtcnn.detect(img)[0]
 
     if box is not None and len(box) > 0:
         x1, y1, x2, y2 = map(int, box[0])
-        margin_pct = 0.2
+        margin_pct = config.CROP_MARGIN_PCT
         box_w = x2 - x1
         box_h = y2 - y1
         x1 = max(int(x1 - margin_pct * box_w), 0)
@@ -34,7 +35,7 @@ def load_and_preprocess_image(image_bytes: bytes, transform):
     else:
         cropped_img = img
 
-    cropped_img = cropped_img.resize((224, 224))
+    cropped_img = cropped_img.resize((config.INPUT_SIZE, config.INPUT_SIZE))
     processed_img = transform(cropped_img)
 
     return processed_img.unsqueeze(0)
@@ -42,7 +43,7 @@ def load_and_preprocess_image(image_bytes: bytes, transform):
 
 transforms = T.Compose(
     [
-        T.Resize((224, 224)),
+        T.Resize((config.INPUT_SIZE, config.INPUT_SIZE)),
         T.ToImage(),
         T.ToDtype(torch.float32, scale=True),
         T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -52,15 +53,22 @@ transforms = T.Compose(
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 backbone = resnet50()
-model = FaceVerificationModel(backbone, dropout=0.3, embedding_size=config.EMB_DIM).to(
-    device
-)
+model = FaceVerificationModel(
+    backbone, dropout=config.DROPOUT, embedding_size=config.EMB_DIM
+).to(device)
 
 mtcnn = MTCNN(keep_all=False, device=device)
 
-model.load_state_dict(
-    torch.load("./models/face_verification_resnet50.pth", map_location=device)
-)
+if not os.path.exists(config.MODEL_PATH):
+    raise SystemExit(
+        f"No model found at {config.MODEL_PATH}. Train one first: python src/train.py"
+    )
+
+state_dict = torch.load(config.MODEL_PATH, map_location=device)
+# Checkpoints saved via torch.compile carry an `_orig_mod.` key prefix; strip it
+# so the eager model (and old checkpoints) load cleanly.
+state_dict = {k.removeprefix("_orig_mod."): v for k, v in state_dict.items()}
+model.load_state_dict(state_dict)
 model = model.to(device)
 model.eval()
 
@@ -109,8 +117,8 @@ async def compare_faces(
 
     sim = F.cosine_similarity(ref_emb, test_emb).item()
 
-    high_threshold = 0.9
-    low_threshold = 0.5
+    high_threshold = config.THRESHOLD
+    low_threshold = config.EMAIL_THRESHOLD
 
     if sim > high_threshold:
         access = "access_granted"

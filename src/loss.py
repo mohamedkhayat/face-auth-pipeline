@@ -78,5 +78,5 @@ def hybrid_triplet_loss(
     else:
         base_loss = F.relu(d_ap - d_an + margin).mean()
 
-    cosine_weight = 0.25 if epoch > 10 else 0.0
+    cosine_weight = config.COSINE_WEIGHT if epoch > config.COSINE_START_EPOCH else 0.0
     return base_loss + cosine_weight * cosine_sim_loss(anchor_embs, positive_embs)

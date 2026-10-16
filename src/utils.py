@@ -30,8 +30,26 @@ def set_seed(seed=42):
     torch.backends.cudnn.benchmark = False
 
 
+def ensure_dir(path):
+    """Create a directory (and parents) if missing; fail with a clear message."""
+    try:
+        os.makedirs(path, exist_ok=True)
+    except OSError as e:
+        raise SystemExit(f"Could not create directory {path}: {e}") from e
+
+
+def listdir_checked(path):
+    """List directory entries; fail with a clear message if the path is unusable."""
+    if not os.path.isdir(path):
+        raise FileNotFoundError(f"Directory not found: {path}")
+    try:
+        return os.listdir(path)
+    except OSError as e:
+        raise SystemExit(f"Could not read directory {path}: {e}") from e
+
+
 def get_all_identities(root_dir):
-    all_entries = os.listdir(root_dir)
+    all_entries = listdir_checked(root_dir)
     identities = []
     for entry in all_entries:
         full_path = os.path.join(root_dir, entry)
@@ -55,7 +73,7 @@ def build_label_to_images(root_dir, chosen_identities):
     for label in chosen_identities:
         label_path = os.path.join(root_dir, label)
         if os.path.isdir(label_path):
-            image_names = os.listdir(label_path)
+            image_names = listdir_checked(label_path)
 
             image_paths = [
                 os.path.join(label_path, image_name) for image_name in image_names
@@ -84,7 +102,7 @@ def margin_schedule(
     initial_margin=config.INITIAL_MARGIN,
     peak_margin=config.PEAK_MARGIN,
     final_margin=config.FINAL_MARGIN,
-    peak_epoch=15,
+    peak_epoch=config.MARGIN_PEAK_EPOCH,
     total_epochs=config.N_EPOCHS_MARGIN,
 ):
     if epoch < peak_epoch:
@@ -100,7 +118,7 @@ def margin_schedule(
 
 class EarlyStopping:
     def __init__(
-        self, patience=5, min_delta=0.0, path="./models/earlystopping_model.pth"
+        self, patience=5, min_delta=0.0, path=config.MODEL_PATH
     ):
         self.patience = patience
         self.min_delta = min_delta
@@ -140,7 +158,7 @@ def train_one_epoch(
 
         optimizer.zero_grad()
 
-        with torch.cuda.amp.autocast():
+        with torch.amp.autocast("cuda"):
             anchor_embs = model(anchor_imgs)
             pos_embs = model(pos_imgs)
             neg_embs = model(neg_imgs)
@@ -208,8 +226,11 @@ def extract_embeddings(model, dataloader, device):
 
 
 def plot_and_log_tsne(
-    embeddings, labels, name, perplexity=30, artifact_name="tsne_plots"
+    embeddings, labels, name, perplexity=config.TSNE_PERPLEXITY, artifact_name="tsne_plots"
 ):
+    # t-SNE requires perplexity < n_samples — clamp for small evaluation sets
+    perplexity = min(perplexity, max(1, embeddings.shape[0] - 1))
+
     tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42)
     reduced = tsne.fit_transform(embeddings)
 
@@ -228,7 +249,8 @@ def plot_and_log_tsne(
     plt.xlabel("t-SNE Dim 1")
     plt.ylabel("t-SNE Dim 2")
 
-    plot_filename = "./tsneplots/tsne_plot" + name + ".png"
+    ensure_dir(config.TSNE_PLOTS_DIR)
+    plot_filename = os.path.join(config.TSNE_PLOTS_DIR, "tsne_plot" + name + ".png")
     plt.savefig(plot_filename)
     plt.close()
 
@@ -247,11 +269,12 @@ def build_label_to_imgs(root_dir):
     Returns a dictionary: { 'n000001': [path1, path2, ...], 'n000009': [...], ... }
     """
     label_to_imgs = {}
-    for identity_folder in os.listdir(root_dir):
+
+    for identity_folder in listdir_checked(root_dir):
         identity_path = os.path.join(root_dir, identity_folder)
 
         if os.path.isdir(identity_path):
-            image_filenames = os.listdir(identity_path)
+            image_filenames = listdir_checked(identity_path)
 
             image_paths = [
                 os.path.join(identity_path, img_name)
@@ -345,14 +368,22 @@ def evaluate_model(model, device, dataset_path, test_transforms, name):
     label_to_imgs = build_label_to_imgs(dataset_path)
 
     subset_dict = random_subset_label_dict(
-        label_to_imgs, num_identities=10, max_imgs_per_identity=20
+        label_to_imgs,
+        num_identities=config.EVAL_IDENTITY_SUBSET,
+        max_imgs_per_identity=config.EVAL_MAX_IMGS_PER_IDENTITY,
     )
     tsne_dataset = TSNEDataset(subset_dict, transform=test_transforms)
-    tsne_dataloader = DataLoader(tsne_dataset, batch_size=32, shuffle=False)
+    tsne_dataloader = DataLoader(
+        tsne_dataset, batch_size=config.EVAL_BATCH_SIZE, shuffle=False
+    )
 
     embeddings, labels = extract_embeddings(model, tsne_dataloader, device)
     plot_and_log_tsne(
-        embeddings, labels, name=name, perplexity=40, artifact_name="tsne_" + name
+        embeddings,
+        labels,
+        name=name,
+        perplexity=config.TSNE_PERPLEXITY,
+        artifact_name="tsne_" + name,
     )
 
     similarities, true_labels = compute_cosine_similarities(
@@ -413,8 +444,8 @@ def evaluate_model(model, device, dataset_path, test_transforms, name):
     plt.title("ROC Curve for Face Verification (Cosine Similarity)")
     plt.legend(loc="lower right")
 
-    os.makedirs("./ROCplots", exist_ok=True)
-    plot_filename = f"./ROCplots/ROC_CURVE_{name}.png"
+    ensure_dir(config.ROC_PLOTS_DIR)
+    plot_filename = os.path.join(config.ROC_PLOTS_DIR, f"ROC_CURVE_{name}.png")
     plt.savefig(plot_filename)
     plt.close()
 

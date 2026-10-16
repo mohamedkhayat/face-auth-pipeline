@@ -1,6 +1,7 @@
 from torch.utils.data import Dataset
 import random
 from PIL import Image
+import config
 
 
 class FaceVerificationDataset(Dataset):
@@ -14,7 +15,7 @@ class FaceVerificationDataset(Dataset):
         ]
 
     def __len__(self):
-        return len(self.valid_pairs) * 10
+        return len(self.valid_pairs) * config.SAMPLES_PER_IDENTITY
 
     def __getitem__(self, idx):
         anchor_label = random.choice(self.valid_pairs)
